@@ -1,0 +1,23 @@
+// src/api/events.ts
+import api from './axios';
+import { RsvpDto } from '../types/Rvsp';
+import { MyEventsDto } from '../types/MyEventsDto';
+
+export function fetchRsvpStatus(eventId: number): Promise<RsvpDto> {
+  return api.get(`/events/${eventId}/rsvp`).then(r => r.data);
+}
+export function toggleRsvp(eventId: number): Promise<RsvpDto> {
+  return api.post(`/events/${eventId}/rsvp`).then(r => r.data);
+}
+
+export function fetchMyEventsAll(): Promise<MyEventsDto> {
+  return api.get<MyEventsDto>('/events/my/all').then(r => r.data);
+}
+
+export function uploadEventImages(id: number, files: FileList): Promise<string[]> {
+  const fd = new FormData();
+  Array.from(files).forEach(f => fd.append('files', f));
+  return api.post<string[]>(`/events/${id}/images`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }).then(r => r.data);
+}
