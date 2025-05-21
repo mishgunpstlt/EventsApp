@@ -15,7 +15,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { useNavigate } from 'react-router-dom';
 
-/* ---------- типы и schema ---------- */
 interface FormValues {
   username: string;
   password: string;
@@ -27,9 +26,9 @@ const schema: yup.ObjectSchema<FormValues> = yup.object({
 });
 
 export default function Login() {
-  const { login }     = useAuth();
-  const notify        = useNotification();
-  const navigate      = useNavigate();
+  const { login, user } = useAuth();
+  const notify = useNotification();
+  const navigate = useNavigate();
 
   const {
     control,
@@ -41,14 +40,14 @@ export default function Login() {
     try {
       await login(vals.username, vals.password);
       notify('Успешный вход', 'success');
-      navigate('/');
+      // после логина перенаправляем по роли
+      navigate('/', { replace: true });
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Неверные учётные данные';
       notify(msg, 'error');
     }
   };
 
-  /* ---------- UI ---------- */
   return (
     <Container maxWidth="xs" sx={{ mt: 8 }}>
       <Paper sx={{ p: 4, border: '2px solid transparent',
@@ -59,7 +58,6 @@ export default function Login() {
         </Typography>
 
         <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {/* Логин */}
           <Controller
             name="username"
             control={control}
@@ -74,7 +72,6 @@ export default function Login() {
             )}
           />
 
-          {/* Пароль */}
           <Controller
             name="password"
             control={control}

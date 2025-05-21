@@ -1,10 +1,13 @@
 // 1) src/main/java/com/example/eventsbackend/model/Rsvp.java
 package com.example.eventsbackend.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Data
@@ -34,4 +37,10 @@ public class Rsvp {
      */
     @Column
     private Integer rating;
+
+    @OneToMany(mappedBy = "rsvp",
+            cascade = CascadeType.ALL,      // ← удаляем вместе с RSVP
+            orphanRemoval = true)
+    @JsonIgnoreProperties("rsvp")
+    private List<Ticket> tickets = new ArrayList<>();
 }

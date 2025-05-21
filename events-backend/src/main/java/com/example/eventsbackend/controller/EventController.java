@@ -4,6 +4,7 @@ import com.example.eventsbackend.dto.EventDto;
 import com.example.eventsbackend.dto.MyEventsDto;
 import com.example.eventsbackend.service.EventService;
 import com.example.eventsbackend.service.RsvpService;
+import com.example.eventsbackend.storage.ImageStorageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
@@ -11,6 +12,7 @@ import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -30,6 +32,8 @@ public class EventController {
 
     private final EventService eventService;
     private final RsvpService rsvpService;
+    private final ImageStorageService imgStore;
+
 
     @GetMapping
     public List<EventDto> listAll(
@@ -48,6 +52,7 @@ public class EventController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")   // ← теперь только админ
     @ResponseStatus(HttpStatus.CREATED)
     public EventDto create(@Valid @RequestBody EventDto dto, Principal principal) {
         return eventService.create(dto, principal);
@@ -76,12 +81,11 @@ public class EventController {
     }
 
     @PostMapping("/{id}/images")
-    public ResponseEntity<List<String>> uploadImages(
+    public List<String> uploadImages(
             @PathVariable Long id,
             @RequestParam("files") MultipartFile[] files
     ) throws IOException {
-        List<String> urls = eventService.uploadImages(id, files);
-        return ResponseEntity.ok(urls);
+        return eventService.uploadImages(id, files);
     }
 
     // статическая раздача файлов:
@@ -90,13 +94,10 @@ public class EventController {
             @PathVariable Long id,
             @PathVariable String filename
     ) throws IOException {
-        Path file = Paths.get("uploads/events")
-                .resolve(id.toString())
-                .resolve(filename);
-        Resource res = new UrlResource(file.toUri());
+        Resource r = imgStore.load(Paths.get("uploads/events"), id, filename);
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_TYPE, Files.probeContentType(file))
-                .body(res);
+                .header(HttpHeaders.CONTENT_TYPE, Files.probeContentType(Paths.get(filename)))
+                .body(r);
     }
 
     @DeleteMapping("/{id}/images/{filename}")

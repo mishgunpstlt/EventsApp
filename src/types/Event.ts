@@ -16,4 +16,5 @@ export interface Event {
     ownerRatingCount: number;
     level: string;
     imageUrls?: string[];
+    status: 'PUBLISHED' | 'PENDING' | 'REJECTED';
   }

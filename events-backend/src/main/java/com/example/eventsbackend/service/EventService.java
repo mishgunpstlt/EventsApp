@@ -11,6 +11,7 @@ import com.example.eventsbackend.model.User;
 import com.example.eventsbackend.repo.EventImageRepository;
 import com.example.eventsbackend.repo.EventRepository;
 import com.example.eventsbackend.repo.RsvpRepository;
+import com.example.eventsbackend.storage.ImageStorageService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.jpa.domain.Specification;
@@ -36,6 +37,7 @@ public class EventService {
     private final Path uploadRoot = Paths.get("uploads/events");
     private final GeocodingService geocodingService;
     private final EmailService emailService;
+    private final ImageStorageService imgStore;
 
     public List<EventDto> findAll(
             Optional<String> category,
@@ -199,23 +201,7 @@ public class EventService {
 
     public List<String> uploadImages(Long eventId, MultipartFile[] files) throws IOException {
         Event ev = repo.findById(eventId).orElseThrow(() -> new NotFoundException("Событие с id=" + eventId + " не найдено"));
-        Path dir = uploadRoot.resolve(eventId.toString());
-        Files.createDirectories(dir);
-
-        List<String> urls = new ArrayList<>();
-        for (MultipartFile file : files) {
-            String fn = UUID.randomUUID() + "-" + file.getOriginalFilename();
-            try (var in = file.getInputStream()) {
-                Files.copy(in, dir.resolve(fn));
-            }
-            EventImage ei = new EventImage();
-            ei.setEvent(ev);
-            ei.setFilename(fn);
-            eventImageRepository.save(ei);
-            // публичный URL
-            urls.add("/api/events/" + eventId + "/images/" + fn);
-        }
-        return urls;
+        return imgStore.saveForEvent(ev, files);
     }
 
     public void deleteImage(Long eventId, String filename, Principal principal) throws IOException {
@@ -224,14 +210,7 @@ public class EventService {
         if (!ev.getOwner().getUsername().equals(principal.getName())) {
             throw new AccessDeniedException("Вы не являетесь владельцем этого события");
         }
-
-        // удалить запись из БД
-        eventImageRepository.findByEventIdAndFilename(eventId, filename)
-                .ifPresent(eventImageRepository::delete);
-
-        // удалить файл
-        Path file = uploadRoot.resolve(eventId.toString()).resolve(filename);
-        Files.deleteIfExists(file);
+        imgStore.deleteForEvent(eventId, filename);
     }
 
     public EventDto toFullDto(Event ev) {
@@ -257,7 +236,7 @@ public class EventService {
         return dto;
     }
 
-    private String diffBetween(Event oldEv, Event newEv) {
+    public String diffBetween(Event oldEv, Event newEv) {
         List<String> items = new ArrayList<>();
 
         if (!Objects.equals(oldEv.getTitle(), newEv.getTitle())) {

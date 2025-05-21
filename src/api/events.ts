@@ -14,10 +14,28 @@ export function fetchMyEventsAll(): Promise<MyEventsDto> {
   return api.get<MyEventsDto>('/events/my/all').then(r => r.data);
 }
 
-export function uploadEventImages(id: number, files: FileList): Promise<string[]> {
+/** загрузка картинок для обычной заявки */
+export function uploadRequestImages(id: number, files: FileList) {
   const fd = new FormData();
   Array.from(files).forEach(f => fd.append('files', f));
-  return api.post<string[]>(`/events/${id}/images`, fd, {
+
+  return api.post<string[]>(
+    `/event-requests/${id}/images`,  // ✅ новый путь
+    fd,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  ).then(r => r.data);
+}
+
+/** загрузка картинок напрямую в событие (для админа) */
+export async function uploadEventImages(eventId: number, files: FileList) {
+  const fd = new FormData();
+  Array.from(files).forEach(f => fd.append('files', f));
+
+  return api.post<string[]>(`/events/${eventId}/images`, fd, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }).then(r => r.data);
+}
+
+export async function deleteRequestImage(reqId: number, filename: string) {
+  await api.delete(`/event-requests/${reqId}/images/${filename}`);
 }

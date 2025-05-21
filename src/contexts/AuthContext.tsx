@@ -15,6 +15,11 @@ interface JwtPayload {
       В примере – username хранится в claim `sub` */
   sub: string;
 }
+
+export interface RoleDto {
+  id: number;
+  name: string;         // "ROLE_USER", "ROLE_ADMIN", …
+}
   
 export interface UserInfo {
   username: string;
@@ -22,6 +27,7 @@ export interface UserInfo {
   fullName: string;
   // флаг, говорящий о том, что профиль заполнен
   profileComplete: boolean;
+  roles: RoleDto[];
 }
 
 interface AuthContextValue {
@@ -92,6 +98,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (username: string, password: string) => {
     const { data } = await api.post('/auth/login', { username, password });
     saveToken(data.token);
+    setUser(prev => prev
+      ? { ...prev, roles: data.roles }
+      : { username, email: '', fullName: '', profileComplete: false, roles: data.roles }
+    );
     await loadProfile();
   };
 
