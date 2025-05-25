@@ -44,50 +44,21 @@ public class EventService {
             Optional<String> format,
             Optional<String> city,
             Optional<String> level,
+            Optional<String> q,
             Optional<String> sort
     ) {
-        Specification<Event> spec = Specification.where(null);
+        String query    = q.filter(s -> !s.isBlank()).orElse(null);
+        String sortMode = sort.orElse("date");  // date|relevance|rating|popularity
 
-        if (category.isPresent()) {
-            spec = spec.and((root, q, cb) ->
-                    cb.equal(root.get("category"), category.get())
-            );
-        }
-        if (format.isPresent()) {
-            spec = spec.and((root, q, cb) ->
-                    cb.equal(root.get("format"), format.get())
-            );
-        }
-        if (city.isPresent()) {
-            spec = spec.and((root, q, cb) ->
-                    cb.equal(root.get("city"), city.get())
-            );
-        }
+        List<Event> events = repo.searchWithFilters(
+                query,
+                category.orElse(null),
+                format.orElse(null),
+                city.orElse(null),
+                level.orElse(null),
+                sortMode
+        );
 
-        if (level.isPresent()) {
-            spec = spec.and((root, q, cb) ->
-                    cb.equal(root.get("level"), level.get())
-            );
-        }
-
-        // 2) достаём из базы все события по этим условиям
-        List<Event> events = repo.findAll(spec);
-
-        switch (sort.get()) {
-            case "rating":
-                events.sort(Comparator.<Event>comparingDouble(e ->
-                        rsvpRepo.avgRatingByOwner(e.getOwner().getUsername())).reversed());
-                break;
-            case "date":
-                events.sort(Comparator.comparing(Event::getDate));
-                break;
-            case "popularity":
-                events.sort(Comparator.<Event>comparingLong(e ->
-                        rsvpRepo.countRatingsByOwner(e.getOwner().getUsername())).reversed());
-                break;
-        }
-
-        // 4) превращаем в DTO, подставляя средний рейтинг организатора
         return events.stream()
                 .map(this::toFullDto)
                 .toList();

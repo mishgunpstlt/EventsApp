@@ -6,6 +6,7 @@ import com.example.eventsbackend.model.User;
 import com.example.eventsbackend.repo.UserRepository;
 import com.example.eventsbackend.security.JwtUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.*;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.bcrypt.*;
@@ -26,6 +27,7 @@ public class AuthController {
     BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     @PostMapping("/register")
+    @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Object> register(@RequestBody Map<String,String> body) {
         if (userRepo.findByUsername(body.get("username")).isPresent())
             throw new RuntimeException("Пользователь существует");

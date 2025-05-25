@@ -1,0 +1,32 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    container_name: events-postgres
+    environment:
+      POSTGRES_DB: eventsdb
+      POSTGRES_USER: events
+      POSTGRES_PASSWORD: 1753
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: .
+    container_name: events-backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    environment:
+      # вместо localhost используем докер-хостнейм postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventsdb
+      SPRING_DATASOURCE_USERNAME: events
+      SPRING_DATASOURCE_PASSWORD: 1753
+      # в контейнерной среде проверяем существующую схему и прогоняем миграции
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_FLYWAY_ENABLED: 'true'
+
+volumes:
+  pgdata:

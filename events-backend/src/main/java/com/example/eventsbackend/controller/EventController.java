@@ -41,9 +41,10 @@ public class EventController {
             @RequestParam Optional<String> format,
             @RequestParam Optional<String> city,
             @RequestParam(required = false) Optional<String> level,
-            @RequestParam(defaultValue = "date") Optional<String> sort
+            @RequestParam Optional<String> q,
+            @RequestParam Optional<String> sort
     ) {
-        return eventService.findAll(category, format, city, level, sort);
+        return eventService.findAll(category, format, city, level, q, sort);
     }
 
     @GetMapping("/{id}")
