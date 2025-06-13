@@ -1,0 +1,9 @@
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+spring:
+  security:
+    filter:
+      dispatchers: async,request,error
