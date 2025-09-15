@@ -24,7 +24,7 @@ public class JwtFilter extends OncePerRequestFilter {
         String path = req.getServletPath();
 
         // 1) Сразу пропускаем все /api/auth/** без проверки токена
-        if (path.startsWith("/api/auth/")) {
+        if (path.startsWith("/api/auth/") || path.startsWith("/actuator/")) {
             chain.doFilter(req, res);
             return;
         }

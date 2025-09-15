@@ -11,6 +11,7 @@ import com.example.eventsbackend.model.User;
 import com.example.eventsbackend.repo.EventImageRepository;
 import com.example.eventsbackend.repo.EventRepository;
 import com.example.eventsbackend.repo.RsvpRepository;
+import com.example.eventsbackend.storage.ImageStorageService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.jpa.domain.Specification;
@@ -36,56 +37,28 @@ public class EventService {
     private final Path uploadRoot = Paths.get("uploads/events");
     private final GeocodingService geocodingService;
     private final EmailService emailService;
+    private final ImageStorageService imgStore;
 
     public List<EventDto> findAll(
             Optional<String> category,
             Optional<String> format,
             Optional<String> city,
             Optional<String> level,
+            Optional<String> q,
             Optional<String> sort
     ) {
-        Specification<Event> spec = Specification.where(null);
+        String query    = q.filter(s -> !s.isBlank()).orElse(null);
+        String sortMode = sort.orElse("date");  // date|relevance|rating|popularity
 
-        if (category.isPresent()) {
-            spec = spec.and((root, q, cb) ->
-                    cb.equal(root.get("category"), category.get())
-            );
-        }
-        if (format.isPresent()) {
-            spec = spec.and((root, q, cb) ->
-                    cb.equal(root.get("format"), format.get())
-            );
-        }
-        if (city.isPresent()) {
-            spec = spec.and((root, q, cb) ->
-                    cb.equal(root.get("city"), city.get())
-            );
-        }
+        List<Event> events = repo.searchWithFilters(
+                query,
+                category.orElse(null),
+                format.orElse(null),
+                city.orElse(null),
+                level.orElse(null),
+                sortMode
+        );
 
-        if (level.isPresent()) {
-            spec = spec.and((root, q, cb) ->
-                    cb.equal(root.get("level"), level.get())
-            );
-        }
-
-        // 2) достаём из базы все события по этим условиям
-        List<Event> events = repo.findAll(spec);
-
-        switch (sort.get()) {
-            case "rating":
-                events.sort(Comparator.<Event>comparingDouble(e ->
-                        rsvpRepo.avgRatingByOwner(e.getOwner().getUsername())).reversed());
-                break;
-            case "date":
-                events.sort(Comparator.comparing(Event::getDate));
-                break;
-            case "popularity":
-                events.sort(Comparator.<Event>comparingLong(e ->
-                        rsvpRepo.countRatingsByOwner(e.getOwner().getUsername())).reversed());
-                break;
-        }
-
-        // 4) превращаем в DTO, подставляя средний рейтинг организатора
         return events.stream()
                 .map(this::toFullDto)
                 .toList();
@@ -199,23 +172,7 @@ public class EventService {
 
     public List<String> uploadImages(Long eventId, MultipartFile[] files) throws IOException {
         Event ev = repo.findById(eventId).orElseThrow(() -> new NotFoundException("Событие с id=" + eventId + " не найдено"));
-        Path dir = uploadRoot.resolve(eventId.toString());
-        Files.createDirectories(dir);
-
-        List<String> urls = new ArrayList<>();
-        for (MultipartFile file : files) {
-            String fn = UUID.randomUUID() + "-" + file.getOriginalFilename();
-            try (var in = file.getInputStream()) {
-                Files.copy(in, dir.resolve(fn));
-            }
-            EventImage ei = new EventImage();
-            ei.setEvent(ev);
-            ei.setFilename(fn);
-            eventImageRepository.save(ei);
-            // публичный URL
-            urls.add("/api/events/" + eventId + "/images/" + fn);
-        }
-        return urls;
+        return imgStore.saveForEvent(ev, files);
     }
 
     public void deleteImage(Long eventId, String filename, Principal principal) throws IOException {
@@ -224,14 +181,7 @@ public class EventService {
         if (!ev.getOwner().getUsername().equals(principal.getName())) {
             throw new AccessDeniedException("Вы не являетесь владельцем этого события");
         }
-
-        // удалить запись из БД
-        eventImageRepository.findByEventIdAndFilename(eventId, filename)
-                .ifPresent(eventImageRepository::delete);
-
-        // удалить файл
-        Path file = uploadRoot.resolve(eventId.toString()).resolve(filename);
-        Files.deleteIfExists(file);
+        imgStore.deleteForEvent(eventId, filename);
     }
 
     public EventDto toFullDto(Event ev) {
@@ -257,7 +207,7 @@ public class EventService {
         return dto;
     }
 
-    private String diffBetween(Event oldEv, Event newEv) {
+    public String diffBetween(Event oldEv, Event newEv) {
         List<String> items = new ArrayList<>();
 
         if (!Objects.equals(oldEv.getTitle(), newEv.getTitle())) {

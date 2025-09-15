@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import jakarta.validation.constraints.NotBlank;
@@ -51,6 +52,37 @@ public class Event {
 
     private Long ownerRatingCount;
 
+
+    /***
+     * Картинки, прикреплённые к событию.
+     *  - CascadeType.ALL  → сначала удалим их, потом само событие
+     *  - orphanRemoval    → удаление из коллекции = DELETE в БД
+     */
+    @OneToMany(mappedBy = "event",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.LAZY)
+    @JsonIgnoreProperties("event")
+    private List<EventImage> images = new ArrayList<>();
+
+    /* ------ остальное без изменений ------ */
+
+    @OneToMany(mappedBy = "originalEvent",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true)
+    @JsonIgnoreProperties("originalEvent")
+    private List<EventRequest> editRequests = List.of();
+
+    @OneToMany(mappedBy = "event",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true)
+    @JsonIgnoreProperties("event")
+    private List<Rsvp> rsvps = List.of();
+
+    /**
+     * Это поле используете только в DTO — хранить в БД не нужно.
+     */
+    @Transient              // <—
     private List<String> imageUrls;
 }
 

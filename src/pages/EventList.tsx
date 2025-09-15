@@ -1,5 +1,5 @@
 // src/pages/EventList.tsx
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   Container,
   Grid,
@@ -21,6 +21,16 @@ import { Event } from '../types/Event';
 import { CITIES, CATEGORIES, FORMATS, LEVELS } from '../constants';
 import EventCard from '../components/EventCard';
 
+/** Простой хук для дебаунса */
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debounced;
+}
+
 const ROWS_PER_PAGE = 10;
 
 export default function EventList() {
@@ -28,42 +38,58 @@ export default function EventList() {
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState<string | null>(null);
 
-  // Фильтры
+  // Фильтры и поиск
   const [search,   setSearch]   = useState('');
-  const [level, setLevel] = useState('');
+  const [level,    setLevel]    = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo,   setDateTo]   = useState('');
   const [category, setCategory] = useState<string>('');
   const [format,   setFormat]   = useState<string>('');
   const [city,     setCity]     = useState<string>('');
-  const [sort,  setSort]  = useState<'date'|'rating'|'popularity'>('date');
+  const [sort,     setSort]     = useState<'date'|'relevance'|'rating'|'popularity'>('date');
 
   // Пагинация
   const [page, setPage] = useState(1);
 
-  // Загрузка с бэкенда (категория, формат, город)
+  // Реф для поля поиска – чтобы ставить курсор в конец
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Дебаунсим search, чтобы не дергать API на каждый ввод
+  const debouncedSearch = useDebounce(search, 1000);
+
+  // Загружаем события при изменении фильтров, сортировки или debouncedSearch
   useEffect(() => {
     setLoading(true);
     api.get<Event[]>('/events', {
       params: {
-        ...(category && { category }),
-        ...(format   && { format   }),
-        ...(city     && { city     }),
-        ...(level     && { level     }),
-        ...(sort     && { sort     })
+        ...(debouncedSearch && { q: debouncedSearch }),
+        ...(category       && { category }),
+        ...(format         && { format }),
+        ...(city           && { city }),
+        ...(level          && { level }),
+        sort,
       }
     })
-      .then(({ data }) => setAllEvents(data))
+      .then(({ data }) => {
+        setAllEvents(data);
+        setError(null);
+      })
       .catch(() => setError('Не удалось загрузить события'))
       .finally(() => setLoading(false));
-  }, [category, format, city, level, sort]);
+  }, [debouncedSearch, category, format, city, level, sort]);
 
-  // Локальная фильтрация по названию и дате
+  // Автопозиционирование курсора в конец при каждом изменении search
+  useEffect(() => {
+    const inp = searchInputRef.current;
+    if (inp) {
+      const len = inp.value.length;
+      inp.setSelectionRange(len, len);
+    }
+  }, [search]);
+
+  // Локальная фильтрация по дате
   const filtered = useMemo(() => {
     return allEvents.filter(evt => {
-      const titleMatch = evt.title
-        .toLowerCase()
-        .includes(search.toLowerCase());
       const dt = new Date(evt.date);
       const afterFrom = dateFrom
         ? dt >= new Date(dateFrom)
@@ -71,21 +97,20 @@ export default function EventList() {
       const beforeTo = dateTo
         ? dt <= new Date(dateTo + 'T23:59:59')
         : true;
-      return titleMatch && afterFrom && beforeTo;
+      return afterFrom && beforeTo;
     });
-  }, [allEvents, search, dateFrom, dateTo]);
+  }, [allEvents, dateFrom, dateTo]);
 
-  // Сброс страницы при изменении фильтров
+  // Сбрасываем номер страницы при изменении любых фильтров
   useEffect(() => {
     setPage(1);
-  }, [search, dateFrom, dateTo, category, format, city]);
+  }, [search, dateFrom, dateTo, category, format, city, level, sort]);
 
-  // Текущая страница
+  // Чистая пагинация
   const paged = useMemo(() => {
     const start = (page - 1) * ROWS_PER_PAGE;
     return filtered.slice(start, start + ROWS_PER_PAGE);
   }, [filtered, page]);
-
   const pageCount = Math.ceil(filtered.length / ROWS_PER_PAGE);
 
   if (loading) {
@@ -109,7 +134,7 @@ export default function EventList() {
         Список мероприятий
       </Typography>
 
-       {/* Блок с контактами */}
+      {/* Контакты */}
       <Box
         sx={{
           position: 'fixed',
@@ -153,7 +178,7 @@ export default function EventList() {
         </Typography>
       </Box>
 
-      {/* Фильтры */}
+      {/* Фильтры и поиск */}
       <Box
         sx={{
           display: 'flex',
@@ -164,9 +189,10 @@ export default function EventList() {
         }}
       >
         <TextField
-          label="Поиск по названию"
+          label="Поиск"
           value={search}
           onChange={e => setSearch(e.target.value)}
+          inputRef={searchInputRef}
         />
 
         <TextField
@@ -192,9 +218,7 @@ export default function EventList() {
             value={category}
             onChange={e => setCategory(e.target.value)}
           >
-            <MenuItem value="">
-              <em>Все сферы</em>
-            </MenuItem>
+            <MenuItem value=""><em>Все сферы</em></MenuItem>
             {CATEGORIES.map(cat => (
               <MenuItem key={cat.value} value={cat.value}>
                 {cat.label}
@@ -210,9 +234,7 @@ export default function EventList() {
             value={format}
             onChange={e => setFormat(e.target.value)}
           >
-            <MenuItem value="">
-              <em>Все форматы</em>
-            </MenuItem>
+            <MenuItem value=""><em>Все форматы</em></MenuItem>
             {FORMATS.map(f => (
               <MenuItem key={f.value} value={f.value}>
                 {f.label}
@@ -221,24 +243,35 @@ export default function EventList() {
           </Select>
         </FormControl>
 
-        <FormControl sx={{minWidth:140}}>
-        <InputLabel>Уровень</InputLabel>
-        <Select value={level} label="Уровень" onChange={e=>setLevel(e.target.value)}>
-          <MenuItem value=""><em>Все уровни</em></MenuItem>
-          {LEVELS.map(l=>(
-            <MenuItem key={l.value} value={l.value}>{l.label}</MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+        <FormControl sx={{ minWidth: 140 }}>
+          <InputLabel>Уровень</InputLabel>
+          <Select
+            value={level}
+            label="Уровень"
+            onChange={e => setLevel(e.target.value)}
+          >
+            <MenuItem value=""><em>Все уровни</em></MenuItem>
+            {LEVELS.map(l => (
+              <MenuItem key={l.value} value={l.value}>
+                {l.label}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
-      <FormControl sx={{minWidth:140}}>
-        <InputLabel>Сортировать</InputLabel>
-        <Select value={sort} label="Сортировать" onChange={e=>setSort(e.target.value as any)}>
-          <MenuItem value="date">По дате</MenuItem>
-          <MenuItem value="rating">По рейтингу</MenuItem>
-          <MenuItem value="popularity">По популярности</MenuItem>
-        </Select>
-      </FormControl>
+        <FormControl sx={{ minWidth: 140 }}>
+          <InputLabel>Сортировать</InputLabel>
+          <Select
+            value={sort}
+            label="Сортировать"
+            onChange={e => setSort(e.target.value as any)}
+          >
+            <MenuItem value="date">По дате</MenuItem>
+            <MenuItem value="relevance">По релевантности</MenuItem>
+            <MenuItem value="rating">По рейтингу</MenuItem>
+            <MenuItem value="popularity">По популярности</MenuItem>
+          </Select>
+        </FormControl>
 
         <FormControl sx={{ minWidth: 160 }}>
           <InputLabel>Город</InputLabel>
@@ -247,13 +280,9 @@ export default function EventList() {
             value={city}
             onChange={e => setCity(e.target.value)}
           >
-            <MenuItem value="">
-              <em>Все города</em>
-            </MenuItem>
+            <MenuItem value=""><em>Все города</em></MenuItem>
             {CITIES.map(c => (
-              <MenuItem key={c} value={c}>
-                {c}
-              </MenuItem>
+              <MenuItem key={c} value={c}>{c}</MenuItem>
             ))}
           </Select>
         </FormControl>
@@ -267,6 +296,7 @@ export default function EventList() {
             setCategory('');
             setFormat('');
             setCity('');
+            setLevel('');
           }}
         >
           Сбросить

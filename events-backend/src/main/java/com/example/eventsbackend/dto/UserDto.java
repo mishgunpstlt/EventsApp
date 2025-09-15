@@ -1,9 +1,12 @@
 package com.example.eventsbackend.dto;
 
+import com.example.eventsbackend.model.Role;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Data
 public class UserDto {
@@ -16,4 +19,5 @@ public class UserDto {
     private LocalDate birthDate;
     private Double ownerRating;
     private Long ownerRatingCount;
+    private Set<Role> roles = new HashSet<>();
 }
